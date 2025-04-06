@@ -1,4 +1,3 @@
-#![allow(unused)]
 //! # CatBoost Inference
 //!
 //! This library allows you to load and perform inference with CatBoost models.
@@ -15,6 +14,8 @@
 //! Then use the [`CatBoost`] struct to load the model and perform inference.
 //!
 //! Note that categorical features are not supported at this time. (Only float features are supported.)
+
+#![allow(unused)]
 
 use serde::Deserialize;
 use std::{fs::File, io::BufReader, path::Path};
