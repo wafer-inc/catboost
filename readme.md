@@ -22,4 +22,4 @@ let test_features: Vec<f32> = vec![0.1276993, 0.9918129, 0.16597846, 0.98612934]
 let probability = model.predict(&test_features).unwrap();
 ```
 
-Note: the model does not currently support categorical features.
+Note: this library does not currently support categorical features. (Only float features are supported.) But categorical feature support would probably be pretty simple to add. [Leave an issue](https://github.com/wafer-inc/catboost/issues/new) if that's something you're interested in.
