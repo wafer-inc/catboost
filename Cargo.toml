@@ -4,6 +4,7 @@ version = "0.1.1"
 edition = "2024"
 description = "Catboost inference library for Rust"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/wafer-inc/catboost"
 
 [dependencies]
 serde = { version = "1.0.219", features = ["derive"] }
