@@ -1,9 +1,31 @@
 #![allow(unused)]
+//! # CatBoost Inference
+//!
+//! This library allows you to load and perform inference with CatBoost models.
+//!
+//! To use this library, you need to have a CatBoost model saved in JSON format. If using the python catboost library, you can save the model to JSON like this:
+//!
+//! ```python
+//! classifier.save_model(
+//!     model_filename,
+//!     format="json",
+//! )
+//! ```
+//!
+//! Then use the [`CatBoost`] struct to load the model and perform inference.
+//!
+//! Note that categorical features are not supported at this time. (Only float features are supported.)
 
 use serde::Deserialize;
 use std::{fs::File, io::BufReader, path::Path};
 use thiserror::Error;
 
+/// The main struct for the CatBoost model.
+/// This struct contains the model parameters and methods for loading and performing inference.
+///
+/// You most likely want to use [`CatBoost::load`] or [`CatBoost::try_from_json`] to create an instance of this struct.
+///
+/// Then, use [`CatBoost::predict`] or [`CatBoost::predict_raw`] to perform inference.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct CatBoost {
@@ -117,6 +139,8 @@ impl CatBoost {
     ///     "Probability {probability} does not match expected value."
     /// );
     /// ```
+    ///
+    /// It is essential that the features be provided in the same order as they were during training.
     pub fn predict(&self, features: &[f32]) -> Result<f32, InferenceError> {
         let prediction = self.predict_raw(features)?;
         // convert from bits to probability (sigmoid function)
@@ -139,6 +163,8 @@ impl CatBoost {
     ///     "Probability {probability} does not match expected value."
     /// );
     /// ```
+    ///
+    /// It is essential that the features be provided in the same order as they were during training.
     pub fn predict_raw(&self, features: &[f32]) -> Result<f32, InferenceError> {
         // Sanity check that the number of features is correct
         {
