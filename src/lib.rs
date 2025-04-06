@@ -13,6 +13,13 @@ pub struct CatBoost {
 }
 
 impl CatBoost {
+    /// Loads a CatBoost model from a JSON file.
+    ///
+    /// ```rust
+    /// # use catboost::CatBoost;
+    /// # use std::path::Path;
+    /// let model = CatBoost::load(Path::new("models/test/tiny-binary-catboost.json")).unwrap();
+    /// ```
     pub fn load(path: &Path) -> Result<Self, std::io::Error> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
@@ -20,6 +27,13 @@ impl CatBoost {
         Ok(model)
     }
 
+    /// Loads a CatBoost model from a JSON string.
+    ///
+    /// ```rust
+    /// use catboost::CatBoost;
+    /// let model_str = include_str!("../models/test/tiny-binary-catboost.json");
+    /// let model = CatBoost::try_from_json(model_str).unwrap();
+    /// ```
     pub fn try_from_json(model_str: &str) -> Result<Self, serde_json::Error> {
         let model: CatBoost = serde_json::from_str(model_str)?;
         Ok(model)
@@ -90,7 +104,41 @@ pub enum InferenceError {
 impl CatBoost {
     /// Performs inference against the provided features.
     ///
+    /// Returns the the prediction as a probability between 0 and 1.
+    ///
+    /// ```rust
+    /// use catboost::CatBoost;
+    /// use std::path::Path;
+    /// let model = CatBoost::load(Path::new("models/test/tiny-binary-catboost.json")).unwrap();
+    /// let test_features: Vec<f32> = vec![0.1276993, 0.9918129, 0.16597846, 0.98612934];
+    /// let probability = model.predict(&test_features).unwrap(); // predict returns a probability
+    /// assert!(
+    ///     (probability - 0.5245).abs() < 0.01, // about a 52% chance of being positive
+    ///     "Probability {probability} does not match expected value."
+    /// );
+    /// ```
+    pub fn predict(&self, features: &[f32]) -> Result<f32, InferenceError> {
+        let prediction = self.predict_raw(features)?;
+        // convert from bits to probability (sigmoid function)
+        let probability = 1.0 / (1.0 + (-prediction).exp());
+        Ok(probability)
+    }
+
+    /// Performs inference against the provided features.
+    ///
     /// Returns the the prediction in logit space (i.e. the raw output of the model).
+    ///
+    /// ```rust
+    /// use catboost::CatBoost;
+    /// use std::path::Path;
+    /// let model = CatBoost::load(Path::new("models/test/tiny-binary-catboost.json")).unwrap();
+    /// let test_features: Vec<f32> = vec![0.1276993, 0.9918129, 0.16597846, 0.98612934];
+    /// let probability = model.predict_raw(&test_features).unwrap(); // predict returns a probability in logit space (-inf..inf)
+    /// assert!(
+    ///     (probability - 0.09794967).abs() < 0.01, // 0.097 corresponds to about a 52% chance of being positive
+    ///     "Probability {probability} does not match expected value."
+    /// );
+    /// ```
     pub fn predict_raw(&self, features: &[f32]) -> Result<f32, InferenceError> {
         // Sanity check that the number of features is correct
         {
@@ -186,16 +234,6 @@ impl CatBoost {
         let prediction = logits * scale + bias;
 
         Ok(prediction)
-    }
-
-    /// Performs inference against the provided features.
-    ///
-    /// Returns the the prediction as a probability between 0 and 1.
-    pub fn predict(&self, features: &[f32]) -> Result<f32, InferenceError> {
-        let prediction = self.predict_raw(features)?;
-        // convert from bits to probability (sigmoid function)
-        let probability = 1.0 / (1.0 + (-prediction).exp());
-        Ok(probability)
     }
 }
 
