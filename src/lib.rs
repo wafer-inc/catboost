@@ -16,10 +16,14 @@
 //! Note that categorical features are not supported at this time. (Only float features are supported.)
 
 #![allow(unused)]
+#![deny(missing_docs)]
 
 use serde::Deserialize;
 use std::{fs::File, io::BufReader, path::Path};
 use thiserror::Error;
+
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
 
 /// The main struct for the CatBoost model.
 /// This struct contains the model parameters and methods for loading and performing inference.
@@ -27,6 +31,7 @@ use thiserror::Error;
 /// You most likely want to use [`CatBoost::load`] or [`CatBoost::try_from_json`] to create an instance of this struct.
 ///
 /// Then, use [`CatBoost::predict`] or [`CatBoost::predict_raw`] to perform inference.
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct CatBoost {
@@ -72,56 +77,98 @@ impl CatBoost {
     }
 }
 
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 struct Features {
     float_features: Vec<FloatFeature>,
 }
 
+/// A float feature.
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
-struct FloatFeature {
+pub struct FloatFeature {
+    /// feature index among only float features, zero-based indexation.
     feature_index: usize,
+    ///  feature index in pool, zero-based indexation
     flat_feature_index: usize,
+    /// The borders of the feature. These are all the places where this feature is split.
     borders: Vec<f32>,
+    /// Whether the feature has NaN values.
     has_nans: bool,
+    /// How to handle NaN values.
     nan_value_treatment: NanValueTreatment,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Clone, Copy)]
-enum NanValueTreatment {
+/// How to handle NaN values.
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+#[derive(Debug, serde::Serialize, Deserialize, PartialEq, Clone, Copy)]
+pub enum NanValueTreatment {
+    /// No nan values encountered during training.
     #[serde(rename = "AsIs")]
     Unspecified,
+    /// NaN values are treated as true.
     #[serde(rename = "AsTrue")]
     Left,
+    /// NaN values are treated as false.
     #[serde(rename = "AsFalse")]
     Right,
 }
 
+/// An oblivious tree.
+///
+/// Oblivious trees are a type of decision tree that are used in CatBoost.
+/// They have the property that all nodes on the same level in the tree are identical.
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
-struct ObliviousTree {
+pub struct ObliviousTree {
+    /// The leaf values of the tree.
     leaf_values: Vec<f32>,
+    /// The splits of the tree.
     splits: Vec<Split>,
 }
 
+/// A split in the tree.
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "snake_case", tag = "split_type")]
-enum Split {
-    #[serde(rename = "FloatFeature")]
-    FloatFeature {
-        #[expect(unused)]
-        float_feature_index: usize,
-        split_index: usize, // technically, this is the only field we need
-        #[expect(unused)]
-        border: f32,
-    },
+#[serde(rename_all = "snake_case", tag = "")]
+pub struct Split {
+    #[allow(unused)]
+    /// The type of split. Currently only float features are supported
+    split_type: SplitType,
+    /// The index of the feature in the flat feature vector.
+    #[allow(unused)]
+    float_feature_index: usize,
+    /// The index of the split in the tree.
+    /// Technically, this is the only field in [`Split`] used for inference
+    split_index: usize,
+    /// The border of the feature.
+    #[allow(unused)]
+    border: f32,
 }
 
-#[derive(Debug, Error)]
+/// The type of split.
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
+#[derive(Debug, Deserialize)]
+pub enum SplitType {
+    /// A split on a float feature. (Currently only float features are supported)
+    #[serde(rename = "FloatFeature")]
+    FloatFeature,
+}
+
+/// An error that occurs when performing inference with a CatBoost model.
+#[derive(Debug, Error, serde::Serialize)]
 pub enum InferenceError {
+    /// The number of features provided does not match the number of features expected by the model.
     #[error("Incorrect number of features provided. Expected {expected}, got {actual}.")]
-    NumFeaturesMismatch { expected: usize, actual: usize },
+    NumFeaturesMismatch {
+        /// The expected number of features.
+        expected: usize,
+        /// The actual number of features.
+        actual: usize,
+    },
 }
 
 impl CatBoost {
@@ -241,9 +288,7 @@ impl CatBoost {
                     panic!("No leaf values!?");
                 }
 
-                for (level, Split::FloatFeature { split_index, .. }) in
-                    tree.splits.iter().enumerate()
-                {
+                for (level, Split { split_index, .. }) in tree.splits.iter().enumerate() {
                     let go_left = go_lefts[*split_index];
 
                     // Set the corresponding bit in the index.
@@ -320,4 +365,31 @@ fn test_against_big_model() {
         (probability - 0.74518714).abs() < 0.01,
         "Probability does not match expected value."
     );
+}
+
+#[cfg(target_arch = "wasm32")]
+impl From<InferenceError> for JsValue {
+    fn from(err: InferenceError) -> JsValue {
+        // Convert your error to a string representation
+        JsValue::from_str(&format!("{:?}", err))
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen]
+impl CatBoost {
+    /// Load a CatBoost model from a JSON string.
+    #[wasm_bindgen(constructor)]
+    pub fn load_from_string(model_str: &str) -> Result<CatBoost, String> {
+        let model: CatBoost = CatBoost::try_from_json(model_str).map_err(|e| e.to_string())?;
+        Ok(model)
+    }
+
+    /// Perform inference against the provided features.
+    /// The number of features must match the number of features expected by the model.
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen]
+    pub fn infer(&self, features: &[f32]) -> Result<f32, InferenceError> {
+        self.predict(features)
+    }
 }

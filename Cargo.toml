@@ -1,12 +1,19 @@
 [package]
 name = "catboost"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2024"
 description = "Catboost inference library for Rust"
 license = "MIT OR Apache-2.0"
+license-file = "LICENSE.txt"
 repository = "https://github.com/wafer-inc/catboost"
 
 [dependencies]
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 thiserror = "2.0.12"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2.100"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
